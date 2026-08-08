@@ -60,6 +60,17 @@ create table if not exists public.orders (
   created_at timestamptz not null default now()
 );
 
+-- 6. Configuracion editable desde el panel admin (JSONB)
+create table if not exists public.bot_settings (
+  id int primary key default 1,
+  config jsonb not null default '{}'::jsonb,
+  updated_at timestamptz not null default now()
+);
+
+insert into public.bot_settings (id, config, updated_at)
+values (1, '{}'::jsonb, now())
+on conflict (id) do nothing;
+
 -- Indices
 create index if not exists idx_pairs_snapshot_symbol      on public.pairs_snapshot (symbol);
 create index if not exists idx_pairs_snapshot_created_at  on public.pairs_snapshot (created_at desc);
@@ -72,9 +83,11 @@ alter table public.cycles        enable row level security;
 alter table public.signals       enable row level security;
 alter table public.orders        enable row level security;
 alter table public.bot_state     enable row level security;
+alter table public.bot_settings  enable row level security;
 
 create policy "Public select pairs_snapshot" on public.pairs_snapshot for select using (true);
 create policy "Public select cycles"         on public.cycles        for select using (true);
 create policy "Public select signals"        on public.signals       for select using (true);
 create policy "Public select orders"         on public.orders        for select using (true);
 create policy "Public select bot_state"      on public.bot_state     for select using (true);
+create policy "Public select bot_settings"   on public.bot_settings  for select using (true);

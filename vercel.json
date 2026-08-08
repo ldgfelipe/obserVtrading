@@ -5,6 +5,12 @@
       "maxDuration": 300
     }
   },
+  "rewrites": [
+    {
+      "source": "/admin",
+      "destination": "/admin.html"
+    }
+  ],
   "crons": [
     {
       "path": "/api/observe",

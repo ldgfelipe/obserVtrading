@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>obserVtrading - Panel Admin</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f1115; color: #e6e8eb; margin: 0; padding: 24px; }
+    .wrap { max-width: 640px; margin: 0 auto; }
+    h1 { font-size: 1.4rem; }
+    .card { background: #171923; border: 1px solid #2a2e3a; border-radius: 10px; padding: 16px; margin-bottom: 14px; }
+    label { display: block; font-size: 0.85rem; color: #9aa3b2; margin-top: 8px; }
+    input, select, button { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px 10px; border-radius: 6px; border: 1px solid #333a4a; background: #0f1115; color: #e6e8eb; font-size: 0.95rem; }
+    button { background: #3b82f6; border: none; cursor: pointer; margin-top: 16px; font-weight: 600; }
+    button:hover { background: #2563eb; }
+    .inline { display: flex; gap: 10px; align-items: center; }
+    .inline input { flex: 1; }
+    #status { margin-top: 10px; font-size: 0.9rem; }
+    .ok { color: #22c55e; }
+    .err { color: #ef4444; }
+    pre { background: #0b0d10; padding: 10px; border-radius: 6px; overflow: auto; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>obserVtrading - Panel de Configuración</h1>
+    <div class="card">
+      <label>Admin Token (guarda el token del env ADMIN_TOKEN para poder guardar)</label>
+      <input type="password" id="admintoken" placeholder="Introduce el ADMIN_TOKEN para guardar">
+    </div>
+
+    <div class="card">
+      <label>Estado del bot</label>
+      <select id="enabled"><option value="true">ENCENDIDO</option><option value="false">APAGADO</option></select>
+
+      <label>Modo de trading</label>
+      <select id="paper_mode"><option value="true">PAPER (simulación sobre saldo virtual)</option><option value="false">REAL (necesita keys Bitso)</option></select>
+
+      <label>Saldo inicial (MXN)</label>
+      <input type="number" id="paper_initial_balance_mxn" step="100">
+
+      <label>Pares a observar (separados por coma)</label>
+      <input type="text" id="symbols">
+
+      <label>Intervalo entre ciclos (minutos)</label>
+      <input type="number" id="interval_minutes">
+
+      <button onclick="save()" id="savebtn">Guardar configuración</button>
+      <div id="status"></div>
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem;margin:0 0 4px">Estrategia</h2>
+      <label>Stop loss (%)</label>
+      <input type="number" id="quant_stop_loss_pct" step="0.5">
+      <label>Take profit (%)</label>
+      <input type="number" id="quant_take_profit_pct" step="0.5">
+      <label>RSI compra (entry)</label>
+      <input type="number" id="rsi_entry">
+      <label>RSI venta (exit)</label>
+      <input type="number" id="rsi_exit">
+      <label>Monto maximo por trade (MXN)</label>
+      <input type="number" id="max_amount_per_trade_mxn" step="10">
+      <label>Umbral ADX de rango</label>
+      <input type="number" id="adx_range_threshold">
+    </div>
+
+    <div class="card">
+      <h2 style="font-size:1rem;margin:0 0 4px">Config actual (guardada)</h2>
+      <pre id="current"></pre>
+      <button onclick="load()">Recargar</button>
+    </div>
+  </div>
+
+  <script>
+    const F = (id) => document.getElementById(id);
+    async function load() {
+      try {
+        const r = await fetch('/api/settings');
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error);
+        const s = j.settings;
+        F('enabled').value = String(s.ENABLED);
+        F('paper_mode').value = String(s.PAPER_MODE);
+        F('paper_initial_balance_mxn').value = s.PAPER_INITIAL_BALANCE_MXN;
+        F('symbols').value = s.SYMBOLS;
+        F('interval_minutes').value = s.INTERVAL_MINUTES;
+        F('quant_stop_loss_pct').value = s.QUANT_STOP_LOSS_PCT;
+        F('quant_take_profit_pct').value = s.QUANT_TAKE_PROFIT_PCT;
+        F('rsi_entry').value = s.RSI_ENTRY;
+        F('rsi_exit').value = s.RSI_EXIT;
+        F('max_amount_per_trade_mxn').value = s.MAX_AMOUNT_PER_TRADE_MXN;
+        F('adx_range_threshold').value = s.ADX_RANGE_THRESHOLD;
+        F('current').textContent = JSON.stringify(s, null, 2);
+        statusMsg('Config cargada', true);
+      } catch (e) {
+        statusMsg('Error al cargar: ' + e.message, false);
+      }
+    }
+    function save() {
+      const body = {
+        ENABLED: F('enabled').value === 'true',
+        PAPER_MODE: F('paper_mode').value === 'true',
+        PAPER_INITIAL_BALANCE_MXN: Number(F('paper_initial_balance_mxn').value),
+        SYMBOLS: F('symbols').value.trim(),
+        INTERVAL_MINUTES: Number(F('interval_minutes').value),
+        QUANT_STOP_LOSS_PCT: Number(F('quant_stop_loss_pct').value),
+        QUANT_TAKE_PROFIT_PCT: Number(F('quant_take_profit_pct').value),
+        RSI_ENTRY: Number(F('rsi_entry').value),
+        RSI_EXIT: Number(F('rsi_exit').value),
+        MAX_AMOUNT_PER_TRADE_MXN: Number(F('max_amount_per_trade_mxn').value),
+        ADX_RANGE_THRESHOLD: Number(F('adx_range_threshold').value)
+      };
+      const token = F('admintoken').value.trim();
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(body)
+      }).then(r => r.json()).then(j => {
+        if (j.ok) { statusMsg('Guardado OK', true); F('current').textContent = JSON.stringify(j.settings, null, 2); }
+        else statusMsg('Error: ' + j.error, false);
+      }).catch(e => statusMsg('Error: ' + e.message, false));
+    }
+    function statusMsg(msg, ok) {
+      const s = F('status');
+      s.textContent = msg;
+      s.className = ok ? 'ok' : 'err';
+    }
+    load();
+  </script>
+</body>
+</html>
