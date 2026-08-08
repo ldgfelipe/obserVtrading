@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>obserVtrading - Dashboard</title>
+  <style>
+    :root { --bg:#0b0d11; --card:#151922; --line:#2a2f3d; --txt:#e6e8eb; --mut:#98a1b3; --up:#16c784; --dn:#ea3943; --acc:#3b82f6; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--txt); margin: 0; padding: 20px; }
+    .wrap { max-width: 1200px; margin: 0 auto; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; flex-wrap: wrap; gap: 10px; }
+    h1 { font-size: 1.3rem; margin: 0; }
+    .chip { font-size: .78rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--mut); }
+    .chip.green { color: var(--up); border-color: var(--up); }
+    .chip.red { color: var(--dn); border-color: var(--dn); }
+    button { background: var(--acc); border: none; color: #fff; padding: 8px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    button:disabled { opacity: .5; cursor: default; }
+    .err { background:#3a0f14; color:#ff8a96; border:1px solid #61161d; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+    .card h2 { font-size: 1rem; margin: 0 0 10px; color: var(--txt); }
+    table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+    th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    th { color: var(--mut); font-weight: 600; }
+    .num { font-variant-numeric: tabular-nums; }
+    .up { color: var(--up); } .dn { color: var(--dn); }
+    .badge { padding: 2px 8px; border-radius: 6px; font-size: .75rem; font-weight: 700; }
+    .badge.buy { background:#123f2c; color:var(--up); }
+    .badge.sell { background:#3f1226; color:var(--dn); }
+    .badge.hold { background:#1c2433; color:var(--mut); }
+    .pills { display:flex; gap:16px; flex-wrap:wrap; }
+    .pill { flex:1; min-width:150px; }
+    .pill .label { font-size:.75rem; color:var(--mut); }
+    .pill .val { font-size:1.35rem; font-weight:700; }
+    .bar { height:6px; background:var(--line); border-radius:4px; overflow:hidden; margin-top:6px; }
+    .bar > div { height:100%; background:var(--acc); }
+    .empty { color: var(--mut); font-style: italic; padding: 8px 0; }
+    .auto-refresh { font-size:.8rem; color:var(--mut); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>obserVtrading · Dashboard</h1>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="auto-refresh" id="autorefresh"></span>
+        <span class="chip" id="botchip">cargando</span>
+        <button onclick="load()" id="btn">Actualizar</button>
+      </div>
+    </header>
+    <div id="err" class="err" style="display:none"></div>
+
+    <div class="card">
+      <h2>Resumen</h2>
+      <div class="pills" id="summary"></div>
+    </div>
+
+    <div class="card">
+      <h2>Mercado - indicadores en vivo (Bitso)</h2>
+      <table>
+        <thead><tr>
+          <th>Par</th><th>Precio</th><th>RSI</th><th>ADX</th><th>ATR %</th>
+          <th>BB pos</th><th>EMA20</th><th>Var 24h</th><th>Score</th><th>Accion</th>
+        </tr></thead>
+        <tbody id="market"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Movimientos (ordenes)</h2>
+      <table><thead><tr><th>Fecha</th><th>Tipo</th><th>Par</th><th>Precio</th><th>Unidades</th><th>MXN</th><th>Fee</th><th>Modo</th></tr></thead>
+        <tbody id="orders"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Señales</h2>
+      <table><thead><tr><th>Fecha</th><th>Accion</th><th>Par</th><th>Razon</th></tr></thead>
+        <tbody id="signals"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Registro de ciclos</h2>
+      <table><thead><tr><th>Fecha</th><th>Mejor par</th><th>Score</th><th>Decision</th><th>Balance MXN</th></tr></thead>
+        <tbody id="cycles"></tbody></table>
+    </div>
+
+    <div class="card">
+      <h2>Ultimos snapshots por par</h2>
+      <table><thead><tr><th>Par</th><th>Precio</th><th>RSI</th><th>ADX</th><th>ATR %</th><th>Score</th><th>Fecha</th></tr></thead>
+        <tbody id="snapshots"></tbody></table>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let timer = null;
+    const fmt = (n, d) => (n === null || n === undefined) ? '-' : Number(n).toFixed(d ?? 2);
+    const pct = (n) => {
+      if (n === null || n === undefined) return '-';
+      const c = n > 0 ? 'up' : 'dn';
+      return '<span class="' + c + '">' + (n > 0 ? '+' : '') + Number(n).toFixed(2) + '%</span>';
+    };
+
+    function badge(a) {
+      const k = String(a).toUpperCase();
+      if (k === 'BUY') return '<span class="badge buy">BUY</span>';
+      if (k === 'SELL') return '<span class="badge sell">SELL</span>';
+      return '<span class="badge hold">HOLD</span>';
+    }
+
+    async function load() {
+      const btn = $('btn'); btn.disabled = true; btn.textContent = 'Cargando...';
+      $('err').style.display = 'none';
+      try {
+        const r = await fetch('/api/dashboard');
+        const j = await r.json();
+        if (!j.ok) throw new Error(j.error || 'sin datos');
+        render(j);
+        $('autorefresh').textContent = 'Actualizado ' + new Date(j.ts).toLocaleTimeString();
+      } catch (e) {
+        $('err').textContent = 'No se pudo cargar: ' + e.message;
+        $('err').style.display = 'block';
+      } finally {
+        btn.disabled = false; btn.textContent = 'Actualizar';
+      }
+    }
+
+    function render(j) {
+      // bot state chip
+      const bs = j.botState;
+      const on = j.settings.ENABLED;
+      const chip = $('botchip');
+      chip.className = 'chip ' + (on ? 'green' : 'red');
+      chip.textContent = on ? 'BOT ' + (on ? 'ENCENDIDO' : 'APAGADO') + (j.settings.PAPER_MODE ? ' · PAPER' : ' · REAL') : 'BOT APAGADO';
+
+      const pctIn = '</span>';
+
+      // summary
+      let sum = '';
+      sum += '<div class="pill"><div class="label">Balance MXN</div><div class="val">' + fmt(bs?.paper_balance_mxn) + '</div></div>';
+      sum += '<div class="pill"><div class="label">Par actual</div><div class="val" style="font-size:1rem">' + (bs?.current_symbol || '-') + '</div></div>';
+      sum += '<div class="pill"><div class="label">Ultimo ciclo</div><div class="val" style="font-size:.9rem">' + (bs?.last_cycle ? new Date(bs.last_cycle).toLocaleString() : '-') + '</div></div>';
+      sum += '<div class="pill"><div class="label">Stop / Take %</div><div class="val" style="font-size:.9rem">' + j.settings.QUANT_STOP_LOSS_PCT + ' / ' + j.settings.QUANT_TAKE_PROFIT_PCT + '</div></div>';
+      $('summary').innerHTML = sum;
+
+      // market
+      let m = '';
+      for (const r of (j.market || [])) {
+        const last = r.ema20 ? r.price / r.ema20 - 1 : 0;
+        m += '<tr><td><b>' + r.symbol + '</b></td>'
+          + '<td class="num">' + r.price.toLocaleString() + '</td>'
+          + '<td class="num">' + fmt(r.rsi, 1) + '</td>'
+          + '<td class="num">' + fmt(r.adx, 1) + '</td>'
+          + '<td class="num">' + fmt(r.atrPct, 2) + '</td>'
+          + '<td class="num">' + fmt(r.bb_position) + '</td>'
+          + '<td class="num">' + (last >= 0 ? '<span class="up">' : '<span class="dn">') + (last >= 0 ? '+' : '') + (last * 100).toFixed(1) + '%</span></td>'
+          + '<td>' + pct(r.vol24) + '</td>'
+          + '<td class="num" style="font-weight:700;color:' + (r.score > 0 ? 'var(--up)' : r.score < 0 ? 'var(--dn)' : 'inherit') + '">' + r.score + '</td>'
+          + '<td>' + badge(r.score > 20 ? 'BUY' : r.score < -10 ? 'SELL' : 'HOLD') + '</td></tr>';
+      }
+      $('market').innerHTML = m || '<tr><td colspan="10" class="empty">Sin datos de mercado</td></tr>';
+
+      // orders
+      let o = '';
+      for (const r of (j.orders || [])) {
+        o += '<tr><td>' + (r.created_at ? new Date(r.created_at).toLocaleString() : '-') + '</td>'
+          + '<td>' + badge(r.action) + '</td><td>' + (r.symbol || '-') + '</td>'
+          + '<td class="num">' + fmt(r.price) + '</td><td class="num">' + fmt(r.units, 6) + '</td>'
+          + '<td class="num">' + fmt(r.amount_mxn) + '</td><td class="num">' + fmt(r.fee_mxn, 4) + '</td>'
+          + '<td>' + (r.type || 'paper') + '</td></tr>';
+      }
+      $('orders').innerHTML = o || '<tr><td colspan="8" class="empty">Sin movimientos aun</td></tr>';
+
+      // signals
+      let s = '';
+      for (const r of (j.signals || [])) {
+        s += '<tr><td>' + (r.created_at ? new Date(r.created_at).toLocaleString() : '-') + '</td>'
+          + '<td>' + badge(r.action) + '</td><td>' + (r.symbol || '-') + '</td><td>' + (r.reason || '-') + '</td></tr>';
+      }
+      $('signals').innerHTML = s || '<tr><td colspan="4" class="empty">Sin señales aun</td></tr>';
+
+      // cycles
+      let c = '';
+      for (const r of (j.cycles || [])) {
+        c += '<tr><td>' + (r.started ? new Date(r.started).toLocaleString() : '-') + '</td>'
+          + '<td>' + (r.best_symbol || '-') + '</td><td class="num">' + fmt(r.best_score) + '</td>'
+          + '<td>' + badge(r.decision) + '</td><td class="num">' + fmt(r.paper_balance_mxn) + '</td></tr>';
+      }
+      $('cycles').innerHTML = c || '<tr><td colspan="5" class="empty">Sin ciclos aun</td></tr>';
+
+      // snapshots (ultimos por par)
+      let rows = j.snapshots || [];
+      const seen = new Set();
+      const latest = [];
+      for (const r of rows) {
+        if (seen.has(r.symbol)) continue;
+        seen.add(r.symbol); latest.push(r);
+      }
+      let sp = '';
+      for (const r of latest.slice(0, 15)) {
+        sp += '<tr><td><b>' + r.symbol + '</b></td><td class="num">' + Number(r.price).toLocaleString() + '</td>'
+          + '<td class="num">' + fmt(r.rsi, 1) + '</td><td class="num">' + fmt(r.adx, 1) + '</td>'
+          + '<td class="num">' + fmt(r.atr_pct, 2) + '</td><td class="num">' + fmt(r.score) + '</td>'
+          + '<td>' + (r.created_at ? new Date(r.created_at).toLocaleString() : '-') + '</td></tr>';
+      }
+      $('snapshots').innerHTML = sp || '<tr><td colspan="7" class="empty">Sin snapshots aun (espera el proximo ciclo)</td></tr>';
+
+      // auto-refresh cada 60s
+      if (timer) clearInterval(timer);
+      timer = setInterval(load, 60000);
+    }
+
+    load();
+  </script>
+</body>
+</html>
