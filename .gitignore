@@ -1,0 +1,10 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+.vercel/
+npm-debug.log*
+*.log
+.DS_Store
+dist/
+test_observe.js
