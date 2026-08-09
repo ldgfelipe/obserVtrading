@@ -34,10 +34,10 @@ export default async function handler(req, res) {
     }, null);
 
     // Balance real de Bitso (requiere keys privadas)
-    const balance = await safe(async () => {
+    const balance = await safeTry(async () => {
       const b = await fetchBalance();
       return { ok: true, items: b, ts: new Date().toISOString() };
-    }, { ok: false, items: [], ts: new Date().toISOString(), error: 'Faltan BITSO_API_KEY / BITSO_SECRET en Vercel' });
+    });
 
     res.status(200).json({
       ok: true,
@@ -58,4 +58,12 @@ export default async function handler(req, res) {
 
 async function safe(fn, dflt) {
   try { return await fn(); } catch { return dflt; }
+}
+
+async function safeTry(fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    return { ok: false, items: [], ts: new Date().toISOString(), error: e.message };
+  }
 }
