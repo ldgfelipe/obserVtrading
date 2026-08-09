@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     const balance = await safe(async () => {
       const b = await fetchBalance();
       return { ok: true, items: b, ts: new Date().toISOString() };
-    }, { ok: false, items: [], ts: new Date().toISOString(), error: 'no configured' });
+    }, { ok: false, items: [], ts: new Date().toISOString(), error: 'Faltan BITSO_API_KEY / BITSO_SECRET en Vercel' });
 
     res.status(200).json({
       ok: true,
