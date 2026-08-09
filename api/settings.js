@@ -13,10 +13,16 @@ export default async function handler(req, res) {
   }
 
   if (req.method === 'POST' || req.method === 'PUT') {
-    const token = req.headers['authorization'] || '';
-    const expected = `Bearer ${CONFIG.ADMIN_TOKEN}`;
-    if (!CONFIG.ADMIN_TOKEN || token !== expected) {
-      res.status(401).json({ ok: false, error: 'No autorizado' });
+    const token = (req.headers['authorization'] || '').trim();
+    const expectedToken = (CONFIG.ADMIN_TOKEN || '').trim();
+    const expected = `Bearer ${expectedToken}`;
+    
+    if (!expectedToken) {
+      res.status(500).json({ ok: false, error: 'ADMIN_TOKEN no configurado en el servidor (variables de entorno)' });
+      return;
+    }
+    if (token !== expected) {
+      res.status(401).json({ ok: false, error: 'No autorizado: token inválido o ausente' });
       return;
     }
     const body = (typeof req.body === 'object' && req.body) ? req.body : {};
