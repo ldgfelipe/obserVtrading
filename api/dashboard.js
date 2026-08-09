@@ -1,12 +1,18 @@
 import { getSettings } from '../lib/settings.js';
 import { fetchOhlcv, listCryptoPairs, fetchBalance } from '../lib/bitso.js';
 import { analyzeMarket } from '../lib/analyzer.js';
+import { CONFIG } from '../lib/config.js';
 import {
   getBotState, getLatestPairs, getLastSignal, getLastOrder,
   getCycles, getSignals, getOrders
 } from '../lib/supabase.js';
 
 export default async function handler(req, res) {
+  const startTs = Date.now();
+  console.log('[dashboard] inicio', new Date().toISOString());
+  console.log('[dashboard] env: BITSO_API_KEY=', CONFIG.BITSO_API_KEY ? 'configurada' : 'VACIA',
+    '| BITSO_SECRET=', CONFIG.BITSO_SECRET ? 'configurado' : 'VACIO',
+    '| SUPABASE_URL=', CONFIG.SUPABASE_URL ? 'configurada' : 'VACIA');
   try {
     const settings = await getSettings();
 
@@ -34,11 +40,19 @@ export default async function handler(req, res) {
     }, null);
 
     // Balance real de Bitso (requiere keys privadas)
+    console.log('[dashboard] consultando balance Bitso...');
     const balance = await safeTry(async () => {
       const b = await fetchBalance();
       return { ok: true, items: b, ts: new Date().toISOString() };
     });
+    if (balance.ok) {
+      console.log('[dashboard] balance OK, items:', balance.items.length,
+        '| no-cero:', balance.items.filter(x => Number(x.total) > 0).length);
+    } else {
+      console.error('[dashboard] balance ERROR:', balance.error);
+    }
 
+    console.log('[dashboard] fin, duracion ms:', Date.now() - startTs);
     res.status(200).json({
       ok: true,
       ts: new Date().toISOString(),
@@ -52,18 +66,20 @@ export default async function handler(req, res) {
       botState
     });
   } catch (e) {
+    console.error('[dashboard] ERROR general:', e.message, '\n', e.stack);
     res.status(500).json({ ok: false, error: e.message, stack: e.stack });
   }
 }
 
 async function safe(fn, dflt) {
-  try { return await fn(); } catch { return dflt; }
+  try { return await fn(); } catch (e) { console.error('[dashboard] safe fallback:', e.message); return dflt; }
 }
 
 async function safeTry(fn) {
   try {
     return await fn();
   } catch (e) {
+    console.error('[dashboard] safeTry fallback:', e.message);
     return { ok: false, items: [], ts: new Date().toISOString(), error: e.message };
   }
 }
