@@ -56,6 +56,14 @@
     </div>
 
     <div class="card">
+      <h2>Balance real (Bitso)</h2>
+      <table>
+        <thead><tr><th>Activo</th><th>Disponible</th><th>Bloqueado</th><th>Total</th></tr></thead>
+        <tbody id="balance"></tbody>
+      </table>
+    </div>
+
+    <div class="card">
       <h2>Mercado - indicadores en vivo (Bitso)</h2>
       <table>
         <thead><tr>
@@ -142,6 +150,18 @@
       sum += '<div class="pill"><div class="label">Ultimo ciclo</div><div class="val" style="font-size:.9rem">' + (bs?.last_cycle ? new Date(bs.last_cycle).toLocaleString() : '-') + '</div></div>';
       sum += '<div class="pill"><div class="label">Stop / Take %</div><div class="val" style="font-size:.9rem">' + j.settings.QUANT_STOP_LOSS_PCT + ' / ' + j.settings.QUANT_TAKE_PROFIT_PCT + '</div></div>';
       $('summary').innerHTML = sum;
+
+      // balance real
+      let b = '';
+      const bal = j.balance && j.balance.ok ? (j.balance.items || []) : [];
+      const nz = bal.filter((x) => Number(x.total) > 0).sort((a, c2) => Number(c2.total) - Number(a.total));
+      for (const r of nz) {
+        b += '<tr><td><b>' + r.currency + '</b></td>'
+          + '<td class="num">' + Number(r.available).toLocaleString(undefined, { maximumFractionDigits: 8 }) + '</td>'
+          + '<td class="num">' + Number(r.locked).toLocaleString(undefined, { maximumFractionDigits: 8 }) + '</td>'
+          + '<td class="num">' + Number(r.total).toLocaleString(undefined, { maximumFractionDigits: 8 }) + '</td></tr>';
+      }
+      $('balance').innerHTML = b || '<tr><td colspan="4" class="empty">' + (j.balance?.error || 'Sin datos de balance') + '</td></tr>';
 
       // market
       let m = '';

@@ -1,5 +1,5 @@
 import { getSettings } from '../lib/settings.js';
-import { fetchOhlcv, listCryptoPairs } from '../lib/bitso.js';
+import { fetchOhlcv, listCryptoPairs, fetchBalance } from '../lib/bitso.js';
 import { analyzeMarket } from '../lib/analyzer.js';
 import {
   getBotState, getLatestPairs, getLastSignal, getLastOrder,
@@ -24,20 +24,27 @@ export default async function handler(req, res) {
     const { results } = await analyzeMarket(ohlcvMap, livePairs, settings);
 
     // Registros desde Supabase (con fallback ante tablas ausentes)
-    const snapshots = await safe(() => (await getLatestPairs()).data, []);
-    const cycles = await safe(() => (await getCycles(15)).data, []);
-    const signals = await safe(() => (await getSignals(15)).data, []);
-    const orders = await safe(() => (await getOrders(15)).data, []);
+    const snapshots = await safe(async () => (await getLatestPairs()).data, []);
+    const cycles = await safe(async () => (await getCycles(15)).data, []);
+    const signals = await safe(async () => (await getSignals(15)).data, []);
+    const orders = await safe(async () => (await getOrders(15)).data, []);
     const botState = await safe(async () => {
       const r = await getBotState();
       return r.error ? null : r.data;
     }, null);
+
+    // Balance real de Bitso (requiere keys privadas)
+    const balance = await safe(async () => {
+      const b = await fetchBalance();
+      return { ok: true, items: b, ts: new Date().toISOString() };
+    }, { ok: false, items: [], ts: new Date().toISOString(), error: 'no configured' });
 
     res.status(200).json({
       ok: true,
       ts: new Date().toISOString(),
       settings,
       market: results,
+      balance,
       snapshots: snapshots.slice(0, 40),
       cycles,
       signals,
