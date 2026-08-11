@@ -36,10 +36,21 @@
     .bar > div { height:100%; background:var(--acc); }
     .empty { color: var(--mut); font-style: italic; padding: 8px 0; }
     .auto-refresh { font-size:.8rem; color:var(--mut); }
+    nav { display:flex; gap:6px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:6px; margin-bottom:18px; flex-wrap:wrap; }
+    nav a { color:var(--mut); text-decoration:none; padding:8px 16px; border-radius:8px; font-size:.9rem; font-weight:600; }
+    nav a:hover { color:var(--txt); background:var(--line); }
+    nav a.active { color:#fff; background:var(--acc); }
+    .balance-err { display:none; background:#3a0f14; color:#ff8a96; border:1px solid #61161d; padding:12px; border-radius:8px; margin-bottom:12px; font-size:.9rem; }
+    .balance-err code { background:rgba(255,255,255,.08); padding:2px 6px; border-radius:4px; font-size:.8rem; }
+    .balance-ok { display:none; background:#0f2a1c; color:#5fdba7; border:1px solid #1d5c3c; padding:12px; border-radius:8px; margin-bottom:12px; font-size:.9rem; }
   </style>
 </head>
 <body>
   <div class="wrap">
+    <nav>
+      <a href="/" class="active">Dashboard</a>
+      <a href="/admin">Panel Admin</a>
+    </nav>
     <header>
       <h1>obserVtrading · Dashboard</h1>
       <div style="display:flex;align-items:center;gap:10px">
@@ -57,6 +68,8 @@
 
     <div class="card">
       <h2>Balance real (Bitso)</h2>
+      <div class="balance-err" id="balanceErr"></div>
+      <div class="balance-ok" id="balanceOk"></div>
       <table>
         <thead><tr><th>Activo</th><th>Disponible</th><th>Bloqueado</th><th>Total</th></tr></thead>
         <tbody id="balance"></tbody>
@@ -152,16 +165,27 @@
       $('summary').innerHTML = sum;
 
       // balance real
-      let b = '';
       const bal = j.balance && j.balance.ok ? (j.balance.items || []) : [];
       const nz = bal.filter((x) => Number(x.total) > 0).sort((a, c2) => Number(c2.total) - Number(a.total));
+      let b = '';
       for (const r of nz) {
         b += '<tr><td><b>' + r.currency + '</b></td>'
           + '<td class="num">' + Number(r.available).toLocaleString(undefined, { maximumFractionDigits: 8 }) + '</td>'
           + '<td class="num">' + Number(r.locked).toLocaleString(undefined, { maximumFractionDigits: 8 }) + '</td>'
           + '<td class="num">' + Number(r.total).toLocaleString(undefined, { maximumFractionDigits: 8 }) + '</td></tr>';
       }
-      $('balance').innerHTML = b || '<tr><td colspan="4" class="empty">' + (j.balance?.error || 'Sin datos de balance') + '</td></tr>';
+      const bErr = $('balanceErr'), bOk = $('balanceOk');
+      if (j.balance && j.balance.ok) {
+        bErr.style.display = 'none';
+        bOk.style.display = nz.length ? 'block' : 'none';
+        bOk.innerHTML = '<b>Conectado a Bitso OK</b> · ' + nz.length + ' activos con saldo';
+        $('balance').innerHTML = b || '<tr><td colspan="4" class="empty">Sin datos de balance</td></tr>';
+      } else {
+        bOk.style.display = 'none';
+        bErr.style.display = 'block';
+        bErr.innerHTML = '<b>No se pudo conectar a Bitso para mostrar el balance real.</b><br>Error: <code>' + (j.balance?.error || 'desconocido') + '</code><br><br>Verifica en Vercel que estén definidas <code>BITSO_API_KEY</code> y <code>BITSO_SECRET</code> y haz un <b>Redeploy</b> para que se apliquen. Si ya se hicieron correctamente, revisa los logs de la función <code>/api/dashboard</code>.';
+        $('balance').innerHTML = '<tr><td colspan="4" class="empty">Sin datos de balance</td></tr>';
+      }
 
       // market
       let m = '';
