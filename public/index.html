@@ -43,6 +43,15 @@
     .balance-err { display:none; background:#3a0f14; color:#ff8a96; border:1px solid #61161d; padding:12px; border-radius:8px; margin-bottom:12px; font-size:.9rem; }
     .balance-err code { background:rgba(255,255,255,.08); padding:2px 6px; border-radius:4px; font-size:.8rem; }
     .balance-ok { display:none; background:#0f2a1c; color:#5fdba7; border:1px solid #1d5c3c; padding:12px; border-radius:8px; margin-bottom:12px; font-size:.9rem; }
+    .botlog { max-height:420px; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+    .log-item { border:1px solid var(--line); border-left:4px solid var(--acc); background:#0f131b; padding:10px 12px; border-radius:8px; }
+    .log-item.buy { border-left-color: var(--up); }
+    .log-item.sell { border-left-color: var(--dn); }
+    .log-item.hold { border-left-color: var(--mut); }
+    .log-item .lh { display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:4px; }
+    .log-item .lt { font-size:.85rem; font-weight:700; }
+    .log-item .ld { font-size:.78rem; color:var(--mut); }
+    .log-item .lx { font-size:.85rem; line-height:1.45; color:var(--txt); }
   </style>
 </head>
 <body>
@@ -81,10 +90,15 @@
       <table>
         <thead><tr>
           <th>Par</th><th>Precio</th><th>RSI</th><th>ADX</th><th>ATR %</th>
-          <th>BB pos</th><th>EMA20</th><th>Var 24h</th><th>Score</th><th>Accion</th>
+          <th>BB pos</th><th>EMA20</th><th>Var 24h</th><th>Score</th><th>Accion</th><th>Por que</th>
         </tr></thead>
         <tbody id="market"></tbody>
       </table>
+    </div>
+
+    <div class="card">
+      <h2>Registro de acciones del bot (explicado)</h2>
+      <div class="botlog" id="botlog"></div>
     </div>
 
     <div class="card">
@@ -191,6 +205,7 @@
       let m = '';
       for (const r of (j.market || [])) {
         const last = r.ema20 ? r.price / r.ema20 - 1 : 0;
+        const whyShort = Array.isArray(r.why) && r.why.length ? r.why[0] : '';
         m += '<tr><td><b>' + r.symbol + '</b></td>'
           + '<td class="num">' + r.price.toLocaleString() + '</td>'
           + '<td class="num">' + fmt(r.rsi, 1) + '</td>'
@@ -200,9 +215,27 @@
           + '<td class="num">' + (last >= 0 ? '<span class="up">' : '<span class="dn">') + (last >= 0 ? '+' : '') + (last * 100).toFixed(1) + '%</span></td>'
           + '<td>' + pct(r.vol24) + '</td>'
           + '<td class="num" style="font-weight:700;color:' + (r.score > 0 ? 'var(--up)' : r.score < 0 ? 'var(--dn)' : 'inherit') + '">' + r.score + '</td>'
-          + '<td>' + badge(r.score > 20 ? 'BUY' : r.score < -10 ? 'SELL' : 'HOLD') + '</td></tr>';
+          + '<td>' + badge(r.score > 20 ? 'BUY' : r.score < -10 ? 'SELL' : 'HOLD') + '</td>'
+          + '<td style="white-space:normal;max-width:340px;font-size:.8rem;color:var(--mut)">' + (whyShort || '-') + '</td></tr>';
       }
-      $('market').innerHTML = m || '<tr><td colspan="10" class="empty">Sin datos de mercado</td></tr>';
+      $('market').innerHTML = m || '<tr><td colspan="11" class="empty">Sin datos de mercado</td></tr>';
+
+      // bot log (acciones explicadas en lenguaje humano)
+      const logRows = [];
+      for (const r of (j.signals || [])) {
+        logRows.push({ t: r.created_at, action: r.action, symbol: r.symbol, expl: r.explanation || r.reason || '' });
+      }
+      let bl = '';
+      for (const r of logRows) {
+        const act = String(r.action).toLowerCase();
+        const cls = act === 'buy' ? 'buy' : act === 'sell' ? 'sell' : 'hold';
+        const lbl = act === 'buy' ? 'COMPRA' : act === 'sell' ? 'VENTA' : 'ESPERA';
+        bl += '<div class="log-item ' + cls + '"><div class="lh">'
+          + '<span class="lt">' + badge(r.action) + ' ' + (r.symbol || '') + '</span>'
+          + '<span class="ld">' + (r.t ? new Date(r.t).toLocaleString() : '') + '</span></div>'
+          + '<div class="lx">' + (r.expl || 'Sin explicacion registrada') + '</div></div>';
+      }
+      $('botlog').innerHTML = bl || '<div class="empty">Sin acciones del bot aun. Cuando ejecute un ciclo (cron diario), aqui aparecera la explicacion de cada decision.</div>';
 
       // orders
       let o = '';

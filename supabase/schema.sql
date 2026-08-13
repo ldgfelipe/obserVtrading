@@ -37,6 +37,7 @@ create table if not exists public.cycles (
   decision_reason text,
   paper_balance_mxn numeric
 );
+alter table public.cycles add column if not exists explanation text;
 
 -- 4. Senales de decision
 create table if not exists public.signals (
@@ -46,6 +47,7 @@ create table if not exists public.signals (
   reason text,
   created_at timestamptz not null default now()
 );
+alter table public.signals add column if not exists explanation text;
 
 -- 5. Ordenes (paper/real)
 create table if not exists public.orders (
@@ -59,6 +61,7 @@ create table if not exists public.orders (
   type text default 'paper',
   created_at timestamptz not null default now()
 );
+alter table public.orders add column if not exists explanation text;
 
 -- 6. Configuracion editable desde el panel admin (JSONB)
 create table if not exists public.bot_settings (
